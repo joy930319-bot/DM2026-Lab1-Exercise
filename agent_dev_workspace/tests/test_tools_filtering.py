@@ -69,3 +69,119 @@ def test_variance_filter_tool_known_answer_5():
     for term, expected_var in expected_variances.items():
         actual_var = full_report.loc[full_report["term"] == term, "variance"].values[0]
         assert np.isclose(actual_var, expected_var, atol=1e-3)
+
+
+def test_pearson_filter_tool_known_answer_6():
+    """Test pearson_filter_tool against known answer #6 in TEST_FIXTURE.md.
+
+    Fixture Pearson r with target_class="catB":
+      - alpha: -0.6882
+      - always: 0.3780
+      - beta: -0.7746
+      - delta: 1.0000
+      - gamma: 0.8307
+    """
+    session = SessionState()
+
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    dtm_tools = make_dtm_tools(session)
+    build_dtm_tool = next(t for t in dtm_tools if t.name == "build_dtm_tool")
+    build_dtm_tool.invoke({"ngram_range": [1, 1]})
+
+    filtering_tools = make_filtering_tools(session)
+    pearson_filter_tool = next(t for t in filtering_tools if t.name == "pearson_filter_tool")
+
+    result = pearson_filter_tool.invoke({"target_class": "catB", "top_n": 20})
+
+    assert result["target_class"] == "catB"
+    assert result["total_features"] == 5
+
+    expected_r = {
+        "alpha": -0.6882,
+        "always": 0.3780,
+        "beta": -0.7746,
+        "delta": 1.0000,
+        "gamma": 0.8307
+    }
+
+    for term, exp_val in expected_r.items():
+        assert result["top_terms"][term] == pytest.approx(exp_val, abs=1e-4)
+
+    # Inspect full_report from session results store
+    stored_result = session.results_store.get(result["result_id"])
+    assert stored_result is not None
+    full_report = stored_result.get("full_report")
+    assert full_report is not None
+
+    # Assert column layout
+    assert list(full_report.columns[:2]) == ["term", "pearson_r"]
+
+    # Assert sorted by absolute value descending
+    abs_values = np.abs(full_report["pearson_r"].values)
+    assert np.all(np.diff(abs_values) <= 0)
+
+
+def test_spearman_filter_tool_known_answer_6():
+    """Test spearman_filter_tool against known answer #6 in TEST_FIXTURE.md.
+
+    Fixture Spearman r with target_class="catB":
+      - alpha: -0.7500
+      - always: 0.3780
+      - beta: -0.7746
+      - delta: 1.0000
+      - gamma: 0.9363
+    """
+    session = SessionState()
+
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    dtm_tools = make_dtm_tools(session)
+    build_dtm_tool = next(t for t in dtm_tools if t.name == "build_dtm_tool")
+    build_dtm_tool.invoke({"ngram_range": [1, 1]})
+
+    filtering_tools = make_filtering_tools(session)
+    spearman_filter_tool = next(t for t in filtering_tools if t.name == "spearman_filter_tool")
+
+    result = spearman_filter_tool.invoke({"target_class": "catB", "top_n": 20})
+
+    assert result["target_class"] == "catB"
+    assert result["total_features"] == 5
+
+    expected_spearman_r = {
+        "alpha": -0.7500,
+        "always": 0.3780,
+        "beta": -0.7746,
+        "delta": 1.0000,
+        "gamma": 0.9363
+    }
+
+    for term, exp_val in expected_spearman_r.items():
+        assert result["top_terms"][term] == pytest.approx(exp_val, abs=1e-4)
+
+    # Inspect full_report from session results store
+    stored_result = session.results_store.get(result["result_id"])
+    assert stored_result is not None
+    full_report = stored_result.get("full_report")
+    assert full_report is not None
+
+    # Assert column layout
+    assert list(full_report.columns[:2]) == ["term", "spearman_r"]
+
+    # Assert sorted by absolute value descending
+    abs_values = np.abs(full_report["spearman_r"].values)
+    assert np.all(np.diff(abs_values) <= 0)
